@@ -16,31 +16,30 @@ function Show-Section {
     Write-Host "================================================================" -ForegroundColor DarkCyan
     
     # Visualizing the Command
-    $CommandText = $Command.ToString().Trim()
-    Write-Host "Cmd > $CommandText" -ForegroundColor Yellow
+    # Converting scriptblock to string for display usually captures the braces, 
+    # so we just print a clean message or the content if simple.
+    Write-Host "Cmd > Executing Trust/User Recon..." -ForegroundColor Yellow 
     Write-Host "----------------------------------------------------------------" -ForegroundColor DarkGray
 
     try {
+        # Execute the command block
         $Output = & $Command
         
         if ($Output) {
-            # Format output based on type
-            if ($Output -is [string] -or $Output -is [System.Array]) {
-                 $Output | Format-Table -AutoSize | Out-String | Write-Host -ForegroundColor Green
-            } else {
-                $Output | Format-Table -AutoSize | Out-String | Write-Host -ForegroundColor Gray
-            }
+            # Check if output is a collection or single object and format
+            $Output | Format-Table -AutoSize | Out-String | Write-Host -ForegroundColor Green
         } else {
             Write-Host "[-] No data returned / Not Applicable." -ForegroundColor DarkGray
         }
     }
     catch {
         Write-Host "[!] Error: Access Denied or Module Missing." -ForegroundColor Red
+        Write-Host $_.Exception.Message -ForegroundColor Red
     }
 }
 
-Write-Host "`n    AD ENUMERATION SUITE v2.1" -ForegroundColor Magenta
-Write-Host "    -------------------------" -ForegroundColor White
+Write-Host "`n    AD ENUMERATION SUITE v2.1 (RED TEAM EDITION)" -ForegroundColor Magenta
+Write-Host "    --------------------------------------------" -ForegroundColor White
 
 if (-not (Get-Module -ListAvailable ActiveDirectory)) {
     Write-Host "[!] CRITICAL: ActiveDirectory Module is missing." -ForegroundColor Red
@@ -50,7 +49,8 @@ if (-not (Get-Module -ListAvailable ActiveDirectory)) {
 
 Show-Section -Title "CURRENT USER IDENTITY" -Description "Who am I in the Domain?" -Command {
     $CurrentUser = $env:USERNAME
-    Get-ADUser -Identity $CurrentUser -Properties MemberOf | Select-Object Name, SamAccountName, MemberOf
+    # Added error handling for non-domain contexts
+    try { Get-ADUser -Identity $CurrentUser -Properties MemberOf | Select-Object Name, SamAccountName, MemberOf } catch { "Current user not found in AD" }
 }
 
 # PRIVILEGED GROUPS
@@ -63,6 +63,12 @@ Show-Section -Title "DOMAIN ADMINS HUNT" -Description "Identifying High-Value Ta
 Show-Section -Title "ENTERPRISE ADMINS HUNT" -Description "Forest-Level Access" -Command {
     Get-ADGroupMember -Identity "Enterprise Admins" -Recursive | Select-Object Name, SamAccountName
 }
+
+# --- [ NEW SECTION ADDED HERE ] ---
+Show-Section -Title "DOMAIN TRUSTS & ATTACK VECTORS" -Description "Checking for SID History & Trust Vulnerabilities" -Command {
+    Get-ADTrust -Filter * | Select-Object Name, Direction, IntraForest, SIDFilteringQuarantined, TGTDelegation
+}
+# ----------------------------------
 
 # SERVICE ACCOUNTS
 Show-Section -Title "KERBEROASTING TARGETS" -Description "Service Accounts (SPN set)" -Command {
