@@ -27,7 +27,7 @@ function Show-Section {
 Write-Host "`n    SECURITY DEFENSE ENUMERATOR" -ForegroundColor Magenta
 Write-Host "    ---------------------------" -ForegroundColor White
 
-# THIRD-PARTY ANTIVIRUS (Workstations Only)
+# 1. THIRD-PARTY ANTIVIRUS (Workstations Only)
 Show-Section -Title "3RD PARTY ANTIVIRUS" -Description "Querying WMI SecurityCenter2" -Command {
     try {
         Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntivirusProduct | 
@@ -38,28 +38,31 @@ Show-Section -Title "3RD PARTY ANTIVIRUS" -Description "Querying WMI SecurityCen
 }
 
 # 2. WINDOWS DEFENDER STATUS
-# Checks if Real-Time Protection is actually ON.
 Show-Section -Title "DEFENDER STATUS" -Description "Real-Time Protection & Tamper Checks" -Command {
     Get-MpComputerStatus | 
     Select-Object AMServiceEnabled, RealTimeProtectionEnabled, AntispywareEnabled, IsTamperProtected, AntivirusEnabled
 }
 
-# 3. FIREWALL PROFILES
-# Which walls are up? (Domain, Private, or Public)
+# 3. DEFENDER THREAT HISTORY
+# This lists what Defender has caught in the past.
+Show-Section -Title "DEFENDER THREAT HISTORY" -Description "Past Detections & Quarantined Files" -Command {
+    Get-MpThreatDetection | 
+    Select-Object InitialDetectionTime, ProcessName, @{Name="MalwarePath";Expression={$_.Resources}}, ThreatStatusID
+}
+
+# 4. FIREWALL PROFILES
 Show-Section -Title "FIREWALL PROFILES" -Description "Active Blocking Profiles" -Command {
     Get-NetFirewallProfile | Select-Object Name, Enabled, DefaultInboundAction, DefaultOutboundAction
 }
 
-# 4. FIREWALL RULES 
-# We can't list all 1000 rules, so we check for common blocks or allows.
+# 5. FIREWALL RULES (Sampler)
 Show-Section -Title "FIREWALL RULES (Sample)" -Description "Checking HTTP/SMB rules" -Command {
     Get-NetFirewallRule | 
     Where-Object {$_.DisplayName -like "*Web*" -or $_.DisplayName -like "*SMB*"} | 
     Select-Object DisplayName, Direction, Action, Enabled -First 10
 }
 
-# 5. CONNECTIVITY CHECK
-# Can we reach the outside world?
+# 6. CONNECTIVITY CHECK (Egress Testing)
 Show-Section -Title "EGRESS CHECK" -Description "Testing Outbound Connection (Port 80)" -Command {
     # We test connection to a safe external IP (Google DNS) or internal Gateway
     Test-NetConnection -ComputerName "8.8.8.8" -Port 53 -InformationLevel Detailed
